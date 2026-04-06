@@ -1,0 +1,75 @@
+# ========================
+# Dependencies
+# ========================
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# ========================
+# Runtime data（重点！！）
+# ========================
+server/transcoded/     # 视频转码输出目录（必须忽略）
+server/data/           # 数据库目录
+data/
+*.db
+
+# ========================
+# Media files（防止误提交）
+# ========================
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.flv
+*.wmv
+
+# ========================
+# Build output
+# ========================
+dist/
+build/
+client/dist/
+
+# ========================
+# Logs
+# ========================
+logs/
+*.log
+npm-debug.log*
+
+# ========================
+# OS files
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# IDE
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ========================
+# Environment
+# ========================
+.env
+.env.local
+
+# ========================
+# Claude
+# ========================
+.claude/
+
+# ========================
+# Scripts
+# ========================
+*.vbs
+start.bat
+stop.bat
+create-shortcuts.js
+create-shortcuts.ps1
+refresh-icons.js
+convert-icon.bat
