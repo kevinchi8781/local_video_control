@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Tree, Spin } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { folderApi } from '../api';
@@ -11,19 +11,9 @@ interface FolderNode {
   isRoot: boolean;
   videoCount: number;
   hasChildren: boolean;
-  selectable: boolean;
-  key?: string;
+  key: string;
   children?: FolderNode[];
-}
-
-interface ScanStatus {
-  isScanning: boolean;
-  currentFile: string;
-  processed: number;
-  total: number;
-  new: number;
-  updated: number;
-  error: string | null;
+  isLoading?: boolean;
 }
 
 interface FolderTreeProps {
@@ -39,50 +29,46 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
     queryKey: ['folders'],
     queryFn: async () => {
       const res = await folderApi.getRootFolders();
-      return res.data.data as FolderNode[];
+      const folders = res.data.data as any[];
+      return folders.map(f => ({
+        ...f,
+        key: `${f.id}-${f.path}`,
+        children: f.hasChildren ? [] : undefined
+      }));
     }
   });
 
-  // 初始化树数据
-  useEffect(() => {
+  useState(() => {
     if (data) {
-      setTreeData(Array.isArray(data) ? data : []);
+      setTreeData(data);
     }
-  }, [data]);
+  });
 
-  const loadChildren = async (node: FolderNode): Promise<FolderNode[]> => {
-    if (!node.hasChildren) {
-      return [];
+  const onLoadData = async ({ key, children, ...node }: any) => {
+    if (children && children.length > 0) {
+      return Promise.resolve();
     }
 
     const res = await folderApi.getChildren(node.id, node.path);
-    const children = res.data.data as FolderNode[];
-
-    return children.map(child => ({
+    const childNodes = (res.data.data || []).map((child: any) => ({
       ...child,
-      key: `${child.id}-${child.path}`
+      key: `${child.id}-${child.path}`,
+      children: child.hasChildren ? [] : undefined
     }));
-  };
 
-  const handleExpand = async (keys: React.Key[], info: any) => {
-    setExpandedKeys(keys);
+    const updateTreeData = (nodes: FolderNode[]): FolderNode[] => {
+      return nodes.map(node => {
+        if (node.key === key) {
+          return { ...node, children: childNodes };
+        }
+        if (node.children) {
+          return { ...node, children: updateTreeData(node.children) };
+        }
+        return node;
+      });
+    };
 
-    if (info.expanded && info.node.children === undefined) {
-      const children = await loadChildren(info.node);
-
-      const updateTreeData = (nodes: FolderNode[]): FolderNode[] => {
-        return nodes.map(node => {
-          if (node.id === info.node.id) {
-            return { ...node, children };
-          }
-          if (node.children) {
-            return { ...node, children: updateTreeData(node.children) };
-          }
-          return node;
-        });
-      };
-      setTreeData(updateTreeData(treeData));
-    }
+    setTreeData(updateTreeData(treeData));
   };
 
   const handleSelect = (keys: React.Key[], info: any) => {
@@ -96,18 +82,6 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
     return <Spin />;
   }
 
-  // 递归转换树数据
-  const transformTreeData = (nodes: FolderNode[]): any[] => {
-    return nodes.map(node => ({
-      key: `${node.id}-${node.path}`,
-      title: `${node.label} (${node.videoCount || 0})`,
-      icon: <FolderOutlined />,
-      isLeaf: !node.hasChildren,
-      selectable: true,
-      children: node.children ? transformTreeData(node.children) : undefined
-    }));
-  };
-
   return (
     <div>
       <Tree
@@ -115,9 +89,10 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
         defaultExpandAll={false}
         expandedKeys={expandedKeys}
         selectedKeys={selectedKeys}
-        onExpand={handleExpand}
+        onExpand={setExpandedKeys}
         onSelect={handleSelect}
-        treeData={transformTreeData(treeData)}
+        loadData={onLoadData}
+        treeData={treeData}
       />
     </div>
   );
