@@ -164,6 +164,8 @@ router.get('/:id/stream', async (req, res) => {
     const { id } = req.params;
     const db = await getDatabase();
 
+    console.log(`[Stream] Request for video ${id}`);
+
     const stmt = db.prepare('SELECT path, filename FROM videos WHERE id = ?');
     stmt.bind([id]);
     if (stmt.step()) {
@@ -172,7 +174,10 @@ router.get('/:id/stream', async (req, res) => {
       const filename = row[1];
       stmt.free();
 
+      console.log(`[Stream] Video path: ${videoPath}`);
+
       if (!fs.existsSync(videoPath)) {
+        console.log(`[Stream] Video file not found: ${videoPath}`);
         return res.status(404).json({ error: '视频文件不存在' });
       }
 
@@ -189,6 +194,8 @@ router.get('/:id/stream', async (req, res) => {
       const needsTranscode =
         ['hevc', 'h265', 'vp9', 'av1'].includes(codecs.videoCodec.toLowerCase()) ||
         ['ac3', 'eac3', 'dts', 'truehd'].includes(codecs.audioCodec.toLowerCase());
+
+      console.log(`[Stream] Codecs: video=${codecs.videoCodec}, audio=${codecs.audioCodec}, needsTranscode=${needsTranscode}`);
 
       if (needsTranscode) {
 
@@ -221,6 +228,11 @@ router.get('/:id/stream', async (req, res) => {
         ffmpeg.stdout.on('data', (data) => {
           if (!headersSent) {
             headersSent = true;
+            res.writeHead(200, {
+              'Content-Type': 'video/webm',
+              'Cache-Control': 'no-cache',
+              'Transfer-Encoding': 'chunked'
+            });
           }
           dataSent += data.length;
           res.write(data);

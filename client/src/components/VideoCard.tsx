@@ -3,7 +3,7 @@ import { PlayCircleOutlined } from '@ant-design/icons';
 import FavoriteButton from './FavoriteButton';
 
 interface Video {
-  id?: string | number;
+  id: string | number;
   filename: string;
   thumbnailPath?: string | null;
   durationSeconds?: number | null;
@@ -33,8 +33,14 @@ function formatFileSize(bytes: number | null): string {
   return `${mb.toFixed(0)}MB`;
 }
 
-interface VideoCardProps extends Video {
-  onClick?: () => void;
+interface VideoCardProps {
+  id: string | number;
+  filename: string;
+  thumbnailPath?: string | null;
+  durationSeconds?: number | null;
+  fileSize?: number | null;
+  progressSeconds?: number | null;
+  onClick?: (id: string | number) => void;
 }
 
 export default function VideoCard({
@@ -69,7 +75,7 @@ export default function VideoCard({
           }}
           onClick={(e) => {
             e.stopPropagation();
-            onClick?.();
+            onClick?.(id);
           }}
         >
           {thumbnailPath ? (

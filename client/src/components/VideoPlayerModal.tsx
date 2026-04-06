@@ -9,7 +9,7 @@ import {
   DeleteOutlined,
   VideoCameraOutlined
 } from '@ant-design/icons';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 
 interface VideoPlayerModalProps {
   video: {
@@ -40,16 +40,73 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [showControls, setShowControls] = useState(true);
 
-  // 弹窗打开且 videoRef 就绪时加载视频
-  useEffect(() => {
-    if (!video || !open) return;
+  // 设置视频 ref 并加载视频
+  const setVideoRef = useCallback((videoEl: HTMLVideoElement | null) => {
+    videoRef.current = videoEl;
+    if (videoEl && video && open && !videoEl.src) {
+      console.log('setVideoRef: Loading video, videoId:', video.id);
+      setIsLoading(true);
+      setPlaybackError(null);
+      setIsBuffering(true);
 
-    // 等待 videoRef 就绪
-    if (!videoRef.current) return;
+      const streamUrl = `http://localhost:3001/api/videos/${video.id}/stream`;
+      videoEl.src = streamUrl;
+      videoEl.preload = 'auto';
+      videoEl.volume = volume;
+      videoEl.muted = isMuted;
+
+      const handleLoadedData = async () => {
+        console.log('Video data loaded (setVideoRef), readyState:', videoEl.readyState);
+        try {
+          await videoEl.play();
+          setIsPlaying(true);
+          setIsLoading(false);
+          setIsBuffering(false);
+        } catch (err) {
+          console.log('自动播放等待用户交互:', (err as Error).name);
+          setIsLoading(false);
+          setIsBuffering(false);
+        }
+        videoEl.removeEventListener('loadeddata', handleLoadedData);
+      };
+
+      const handleError = (e: Event) => {
+        const target = e.target as HTMLVideoElement;
+        console.error('Video load error (setVideoRef):', target.error);
+        setIsLoading(false);
+        setIsBuffering(false);
+        if (target.error) {
+          setPlaybackError('视频加载失败：' + target.error.message);
+        }
+        videoEl.removeEventListener('error', handleError);
+      };
+
+      videoEl.addEventListener('loadeddata', handleLoadedData, { once: true });
+      videoEl.addEventListener('error', handleError, { once: true });
+
+      videoEl.load();
+    }
+  }, [video?.id, open, volume, isMuted]);
+
+  // 调试：监听 video 和 open 的变化
+  useEffect(() => {
+    console.log('VideoPlayerModal render:', { video, open, videoId: video?.id });
+  }, [video, open]);
+
+  // 使用 useLayoutEffect 确保在 DOM 渲染后立即执行
+  useLayoutEffect(() => {
+    console.log('VideoPlayerModal useLayoutEffect check:', { video, open, hasRef: !!videoRef.current, videoId: video?.id });
+    if (!video || !open || !videoRef.current) {
+      console.log('VideoPlayerModal useLayoutEffect early return:', { videoOk: !!video, openOk: open, refOk: !!videoRef.current });
+      return;
+    }
+
+    console.log('VideoPlayerModal useLayoutEffect: video=', video, 'open=', open, 'video.id=', video.id);
 
     const videoEl = videoRef.current;
     const streamUrl = `http://localhost:3001/api/videos/${video.id}/stream`;
 
+    console.log('Loading video (layout):', video.id, streamUrl);
     setIsLoading(true);
     setPlaybackError(null);
     setIsBuffering(true);
@@ -63,21 +120,118 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
     videoEl.volume = volume;
     videoEl.muted = isMuted;
 
-    // 等待 loadedmetadata 事件后再尝试播放（此时元数据已加载）
+    // 监听 loadeddata 事件，数据加载完成后自动播放
     const handleLoadedData = async () => {
+      console.log('Video data loaded, readyState:', videoEl.readyState);
       try {
         await videoEl.play();
         setIsPlaying(true);
+        setIsLoading(false);
+        setIsBuffering(false);
       } catch (err) {
         // 自动播放被阻止是正常现象，等待用户手动点击
         console.log('自动播放等待用户交互:', (err as Error).name);
+        setIsLoading(false);
+        setIsBuffering(false);
       }
     };
 
+    // 监听错误
+    const handleError = (e: Event) => {
+      const target = e.target as HTMLVideoElement;
+      console.error('Video load error:', target.error);
+      setIsLoading(false);
+      setIsBuffering(false);
+      if (target.error) {
+        setPlaybackError('视频加载失败：' + target.error.message);
+      }
+    };
+
+    // 监听 canplay 事件
+    const handleCanPlay = () => {
+      console.log('Video can play, readyState:', videoEl.readyState);
+      setIsLoading(false);
+      setIsBuffering(false);
+    };
+
     videoEl.addEventListener('loadeddata', handleLoadedData, { once: true });
+    videoEl.addEventListener('error', handleError, { once: true });
+    videoEl.addEventListener('canplay', handleCanPlay, { once: true });
 
     return () => {
       videoEl.removeEventListener('loadeddata', handleLoadedData);
+      videoEl.removeEventListener('error', handleError);
+      videoEl.removeEventListener('canplay', handleCanPlay);
+    };
+  }, [video?.id, open]);
+
+  // 弹窗打开且 videoRef 就绪时加载视频（备用）
+  useEffect(() => {
+    if (!video || !open) {
+      console.log('useEffect: skipping, video or open is false');
+      return;
+    }
+
+    // 等待 videoRef 就绪
+    if (!videoRef.current) {
+      console.log('useEffect: videoRef not ready, waiting...');
+      return;
+    }
+
+    const videoEl = videoRef.current;
+    // 如果 src 已经设置，说明已经加载过了
+    if (videoEl.src) {
+      console.log('useEffect: src already set, skipping');
+      return;
+    }
+
+    console.log('useEffect: Loading video, videoId:', video.id);
+    setIsLoading(true);
+    setPlaybackError(null);
+    setIsBuffering(true);
+
+    const streamUrl = `http://localhost:3001/api/videos/${video.id}/stream`;
+    videoEl.src = streamUrl;
+    videoEl.preload = 'auto';
+    videoEl.load();
+
+    // 应用当前音量设置
+    videoEl.volume = volume;
+    videoEl.muted = isMuted;
+
+    // 添加事件监听器
+    const handleLoadedData = async () => {
+      console.log('Video data loaded (useEffect), readyState:', videoEl.readyState);
+      try {
+        await videoEl.play();
+        setIsPlaying(true);
+        setIsLoading(false);
+        setIsBuffering(false);
+      } catch (err) {
+        console.log('自动播放等待用户交互:', (err as Error).name);
+        setIsLoading(false);
+        setIsBuffering(false);
+      }
+      videoEl.removeEventListener('loadeddata', handleLoadedData);
+    };
+
+    const handleError = (e: Event) => {
+      const target = e.target as HTMLVideoElement;
+      console.error('Video load error (useEffect):', target.error);
+      setIsLoading(false);
+      setIsBuffering(false);
+      if (target.error) {
+        setPlaybackError('视频加载失败：' + target.error.message);
+      }
+      videoEl.removeEventListener('error', handleError);
+    };
+
+    videoEl.addEventListener('loadeddata', handleLoadedData, { once: true });
+    videoEl.addEventListener('error', handleError, { once: true });
+
+    return () => {
+      videoEl.removeEventListener('loadeddata', handleLoadedData);
+      videoEl.removeEventListener('error', handleError);
     };
   }, [video?.id, open]);
 
@@ -156,11 +310,80 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
   const togglePlay = () => {
     if (!videoRef.current) return;
 
-    const video = videoRef.current;
+    const videoEl = videoRef.current;
+
+    // 检查传入的 video prop 是否有 id
+    console.log('togglePlay called:', {
+      readyState: videoEl.readyState,
+      src: videoEl.src ? 'set' : 'not set',
+      videoPropId: video?.id,
+      open: open
+    });
 
     // 如果视频还没有加载，先加载
-    if (!video.src || video.readyState === 0) {
-      console.log('Video not loaded yet, loading...');
+    if (!videoEl.src) {
+      console.log('Video src not set, setting src and loading...');
+      setIsLoading(true);
+      setPlaybackError(null);
+      setIsBuffering(true);
+
+      // 使用传入的 video prop 的 id
+      const videoId = video?.id;
+      console.log('Using videoId:', videoId);
+
+      if (!videoId) {
+        console.error('video.id is empty or undefined!');
+        setPlaybackError('视频 ID 为空，无法播放');
+        setIsLoading(false);
+        setIsBuffering(false);
+        return;
+      }
+
+      const streamUrl = `http://localhost:3001/api/videos/${videoId}/stream`;
+      console.log('Setting video src to:', streamUrl);
+      videoEl.src = streamUrl;
+      videoEl.preload = 'auto';
+      videoEl.volume = volume;
+      videoEl.muted = isMuted;
+
+      // 添加事件监听器
+      const handleLoadedData = async () => {
+        console.log('Video data loaded (from togglePlay), readyState:', video.readyState);
+        try {
+          await video.play();
+          setIsPlaying(true);
+          setIsLoading(false);
+          setIsBuffering(false);
+        } catch (err) {
+          console.log('自动播放等待用户交互:', (err as Error).name);
+          setIsLoading(false);
+          setIsBuffering(false);
+        }
+        video.removeEventListener('loadeddata', handleLoadedData);
+      };
+
+      const handleError = (e: Event) => {
+        const target = e.target as HTMLVideoElement;
+        console.error('Video load error (from togglePlay):', target.error);
+        setIsLoading(false);
+        setIsBuffering(false);
+        if (target.error) {
+          setPlaybackError('视频加载失败：' + target.error.message);
+        }
+        video.removeEventListener('error', handleError);
+      };
+
+      video.addEventListener('loadeddata', handleLoadedData, { once: true });
+      video.addEventListener('error', handleError, { once: true });
+
+      video.load();
+      return;
+    }
+
+    // readyState 0 = HAVE_NOTHING, 1 = HAVE_METADATA, 2 = HAVE_CURRENT_DATA, 3 = HAVE_FUTURE_DATA, 4 = HAVE_ENOUGH_DATA
+    if (video.readyState < 2) {
+      console.log('Video not ready yet (readyState=' + video.readyState + '), waiting for loadeddata...');
+      // 视频数据还不足，触发 load 并等待 loadeddata 事件自动播放
       setIsLoading(true);
       video.load();
       return;
@@ -172,7 +395,6 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
           setPlaybackError('此视频格式不支持');
           message.error('视频格式不支持');
         }
-        // AbortError 是正常的，忽略
         console.log('Play error:', err.name);
       });
       setIsPlaying(true);
@@ -419,7 +641,7 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
         )}
 
         <video
-          ref={videoRef}
+          ref={setVideoRef}
           style={{
             width: '100%',
             height: '100%',
@@ -427,15 +649,21 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
           }}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
-          onCanPlay={handleCanPlay}
-          onLoadedData={() => {
-            console.log('Video data loaded, ready to play');
+          onCanPlay={(e) => {
+            console.log('Video can play', e.currentTarget.readyState);
+            handleCanPlay();
+          }}
+          onLoadedData={(e) => {
+            console.log('Video data loaded, ready state:', e.currentTarget.readyState);
           }}
           onWaiting={handleWaiting}
           onPlaying={handlePlaying}
           onPause={handlePause}
           onProgress={handleProgress}
-          onError={handleError}
+          onError={(e) => {
+            console.error('Video error:', e);
+            handleError(e);
+          }}
           onEnded={() => {
             setIsPlaying(false);
             setCurrentTime(0);
@@ -512,7 +740,6 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
                   step={0.01}
                   value={isMuted ? 0 : volume}
                   onChange={handleVolumeChange}
-                  onAfterChange={handleVolumeAfterChange}
                   style={{ width: 80 }}
                   trackStyle={{ background: '#722ed1' }}
                   handleStyle={{ borderColor: '#722ed1' }}
