@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Card, Input, Button, Space, Table, message, Modal, Divider, type ColumnsType } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { configApi } from '../api';
-import { FolderOutlined, DeleteOutlined } from '@ant-design/icons';
+import { configApi, videoApi } from '../api';
+import { FolderOutlined, DeleteOutlined, ClearOutlined, SearchOutlined } from '@ant-design/icons';
 
 interface FolderBinding {
   id: string;
@@ -83,6 +83,31 @@ export default function SettingsPage() {
     });
   };
 
+  // 检查无效视频记录
+  const checkInvalidVideos = useMutation({
+    mutationFn: videoApi.checkInvalid,
+    onSuccess: (data) => {
+      const count = data.data.data.count;
+      if (count > 0) {
+        Modal.confirm({
+          title: `发现 ${count} 条无效记录`,
+          content: '这些视频文件已不存在，但数据库中仍有记录。是否要清理？',
+          onOk: () => cleanupInvalidVideos.mutate()
+        });
+      } else {
+        message.success('没有发现无效记录');
+      }
+    }
+  });
+
+  // 清理无效视频记录
+  const cleanupInvalidVideos = useMutation({
+    mutationFn: videoApi.cleanupInvalid,
+    onSuccess: (data) => {
+      message.success(`已清理 ${data.data.data.count} 条无效记录`);
+    }
+  });
+
   if (isLoading) {
     return <div>加载中...</div>;
   }
@@ -160,6 +185,31 @@ export default function SettingsPage() {
           pagination={false}
           locale={{ emptyText: '暂无绑定的文件夹' }}
         />
+      </Card>
+
+      <Divider />
+
+      <Card title="数据库维护">
+        <Space>
+          <Button
+            icon={<SearchOutlined />}
+            onClick={() => checkInvalidVideos.mutate()}
+            loading={checkInvalidVideos.isPending}
+          >
+            检查无效记录
+          </Button>
+          <Button
+            icon={<ClearOutlined />}
+            danger
+            onClick={() => checkInvalidVideos.mutate()}
+            loading={cleanupInvalidVideos.isPending}
+          >
+            清理无效记录
+          </Button>
+        </Space>
+        <p style={{ color: '#999', fontSize: 12, marginTop: 8 }}>
+          提示：无效记录是指视频文件已被删除但数据库中仍有记录的数据
+        </p>
       </Card>
     </div>
   );

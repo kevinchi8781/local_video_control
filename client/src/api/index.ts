@@ -38,7 +38,9 @@ export const videoApi = {
   getVideo: (id: string) => api.get(`/videos/${id}`),
   getStreamUrl: (id: string) => `${API_BASE}/videos/${id}/stream`,
   reportProgress: (id: string, progressSeconds: number, isCompleted: boolean) =>
-    api.post(`/videos/${id}/progress`, { progressSeconds, isCompleted })
+    api.post(`/videos/${id}/progress`, { progressSeconds, isCompleted }),
+  checkInvalid: () => api.get('/videos/check-invalid'),
+  cleanupInvalid: () => api.post('/videos/cleanup-invalid')
 };
 
 // 历史记录 API

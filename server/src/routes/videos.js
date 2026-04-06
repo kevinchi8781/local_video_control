@@ -178,7 +178,11 @@ router.get('/:id/stream', async (req, res) => {
 
       if (!fs.existsSync(videoPath)) {
         console.log(`[Stream] Video file not found: ${videoPath}`);
-        return res.status(404).json({ error: '视频文件不存在' });
+        return res.status(404).json({
+          error: '视频文件不存在',
+          path: videoPath,
+          filename: filename
+        });
       }
 
       // 获取 ffmpeg 路径
@@ -330,6 +334,69 @@ router.get('/:id/play-local', async (req, res) => {
     } else {
       res.status(404).json({ success: false, error: '视频不存在' });
     }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/videos/check-invalid - 检查无效视频记录（文件不存在但数据库有记录）
+router.get('/check-invalid', async (req, res) => {
+  try {
+    const db = await getDatabase();
+    const stmt = db.prepare('SELECT id, filename, path FROM videos');
+    stmt.bind([]);
+
+    const invalidVideos = [];
+    while (stmt.step()) {
+      const row = stmt.get();
+      if (row[2] && !fs.existsSync(row[2])) {
+        invalidVideos.push({
+          id: row[0],
+          filename: row[1],
+          path: row[2]
+        });
+      }
+    }
+    stmt.free();
+
+    res.json({
+      success: true,
+      data: {
+        invalid: invalidVideos,
+        count: invalidVideos.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/videos/cleanup-invalid - 清理无效视频记录（删除数据库中文件不存在的记录）
+router.post('/cleanup-invalid', async (req, res) => {
+  try {
+    const db = await getDatabase();
+    const stmt = db.prepare('SELECT id, path FROM videos');
+    stmt.bind([]);
+
+    const deletedIds = [];
+    while (stmt.step()) {
+      const row = stmt.get();
+      if (row[1] && !fs.existsSync(row[1])) {
+        const deleteStmt = db.prepare('DELETE FROM videos WHERE id = ?');
+        deleteStmt.run([row[0]]);
+        deletedIds.push(row[0]);
+      }
+    }
+    stmt.free();
+    saveDatabase();
+
+    res.json({
+      success: true,
+      data: {
+        deletedIds,
+        count: deletedIds.length
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
