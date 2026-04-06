@@ -3,6 +3,7 @@ const router = express.Router();
 const { getDatabase, saveDatabase } = require('../db/database');
 const fs = require('fs');
 const path = require('path');
+const { spawn, execFile } = require('child_process');
 
 const CONFIG_FILE = path.join(__dirname, '../../data/config.json');
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.webm', '.mov', '.flv', '.wmv', '.m4v'];
@@ -313,13 +314,18 @@ router.get('/:id/play-local', async (req, res) => {
         return res.status(404).json({ success: false, error: '视频文件不存在' });
       }
 
+      // 使用 execFile 启动 PotPlayer（Windows）
       const potPlayerPath = 'C:\\Program Files\\DAUM\\PotPlayer\\PotPlayerMini64.exe';
 
       if (!fs.existsSync(potPlayerPath)) {
         return res.status(404).json({ success: false, error: 'PotPlayer 未安装' });
       }
 
-      spawn(potPlayerPath, [videoPath], { detached: true, stdio: 'ignore' });
+      execFile(potPlayerPath, [videoPath], { detached: true }, (err) => {
+        if (err) {
+          console.error('启动 PotPlayer 失败:', err);
+        }
+      });
 
       res.json({ success: true });
     } else {
