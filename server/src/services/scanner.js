@@ -3,7 +3,6 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { getDatabase, saveDatabase } = require('../db/database');
 const md5 = require('md5');
-const transcodeService = require('./transcodeService');
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.webm', '.mov', '.flv', '.wmv', '.m4v'];
 const THUMBNAIL_DIR = path.join(__dirname, '../../thumbnails');
@@ -321,22 +320,7 @@ async function executeScan() {
     for (let i = 0; i < newVideosToProcess.length; i++) {
       const { videoPath, fileInfo, fileStats, modifiedAt } = newVideosToProcess[i];
       scanState.processed = i + 1;
-
-      // 检查是否需要转码
-      let needsTranscode = false;
-      let transcodedPath = null;
-      try {
-        needsTranscode = await transcodeService.needsTranscoding(videoPath, ffmpegPath);
-        if (needsTranscode) {
-          scanState.currentFile = `正在转码：${path.basename(videoPath)}`;
-          transcodedPath = await transcodeService.transcodeVideo(videoPath, ffmpegPath);
-        } else {
-          scanState.currentFile = `正在生成缩略图：${path.basename(videoPath)}`;
-        }
-      } catch (error) {
-        console.error(`转码失败 ${videoPath}:`, error.message);
-        scanState.currentFile = `生成缩略图：${path.basename(videoPath)}`;
-      }
+      scanState.currentFile = `正在生成缩略图：${path.basename(videoPath)}`;
 
       try {
         const duration = getVideoDuration(videoPath, ffmpegPath);
@@ -346,15 +330,13 @@ async function executeScan() {
         const updateStmt = db.prepare(`
           UPDATE videos SET
             duration_seconds = ?,
-            thumbnail_path = ?,
-            needs_transcode = ?,
-            transcoded_path = ?
+            thumbnail_path = ?
           WHERE path = ?
         `);
-        updateStmt.run([duration, thumbnail, needsTranscode ? 1 : 0, transcodedPath, videoPath]);
+        updateStmt.run([duration, thumbnail, videoPath]);
         updateStmt.free();
 
-        console.log(`  处理完成：${videoPath}${needsTranscode ? ' (已转码)' : ''}`);
+        console.log(`  处理完成：${videoPath}`);
       } catch (error) {
         console.error(`生成缩略图失败 ${videoPath}:`, error.message);
       }
