@@ -120,6 +120,75 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/videos/check-invalid - 检查无效视频记录（文件不存在但数据库有记录）
+router.get('/check-invalid', async (req, res) => {
+  try {
+    console.log('[check-invalid] Starting check...');
+    const db = await getDatabase();
+    const stmt = db.prepare('SELECT id, filename, path FROM videos');
+    stmt.bind([]);
+
+    const invalidVideos = [];
+    let totalChecked = 0;
+    while (stmt.step()) {
+      const row = stmt.get();
+      totalChecked++;
+      if (row[2] && !fs.existsSync(row[2])) {
+        console.log('[check-invalid] Found invalid:', row[0], row[2]);
+        invalidVideos.push({
+          id: row[0],
+          filename: row[1],
+          path: row[2]
+        });
+      }
+    }
+    stmt.free();
+
+    console.log('[check-invalid] Checked', totalChecked, 'videos, found', invalidVideos.length, 'invalid');
+    res.json({
+      success: true,
+      data: {
+        invalid: invalidVideos,
+        count: invalidVideos.length
+      }
+    });
+  } catch (error) {
+    console.error('[check-invalid] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/videos/cleanup-invalid - 清理无效视频记录（删除数据库中文件不存在的记录）
+router.post('/cleanup-invalid', async (req, res) => {
+  try {
+    const db = await getDatabase();
+    const stmt = db.prepare('SELECT id, path FROM videos');
+    stmt.bind([]);
+
+    const deletedIds = [];
+    while (stmt.step()) {
+      const row = stmt.get();
+      if (row[1] && !fs.existsSync(row[1])) {
+        const deleteStmt = db.prepare('DELETE FROM videos WHERE id = ?');
+        deleteStmt.run([row[0]]);
+        deletedIds.push(row[0]);
+      }
+    }
+    stmt.free();
+    saveDatabase();
+
+    res.json({
+      success: true,
+      data: {
+        deletedIds,
+        count: deletedIds.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // GET /api/videos/:id - 获取单个视频详情
 router.get('/:id', async (req, res) => {
   try {
@@ -334,69 +403,6 @@ router.get('/:id/play-local', async (req, res) => {
     } else {
       res.status(404).json({ success: false, error: '视频不存在' });
     }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// GET /api/videos/check-invalid - 检查无效视频记录（文件不存在但数据库有记录）
-router.get('/check-invalid', async (req, res) => {
-  try {
-    const db = await getDatabase();
-    const stmt = db.prepare('SELECT id, filename, path FROM videos');
-    stmt.bind([]);
-
-    const invalidVideos = [];
-    while (stmt.step()) {
-      const row = stmt.get();
-      if (row[2] && !fs.existsSync(row[2])) {
-        invalidVideos.push({
-          id: row[0],
-          filename: row[1],
-          path: row[2]
-        });
-      }
-    }
-    stmt.free();
-
-    res.json({
-      success: true,
-      data: {
-        invalid: invalidVideos,
-        count: invalidVideos.length
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// POST /api/videos/cleanup-invalid - 清理无效视频记录（删除数据库中文件不存在的记录）
-router.post('/cleanup-invalid', async (req, res) => {
-  try {
-    const db = await getDatabase();
-    const stmt = db.prepare('SELECT id, path FROM videos');
-    stmt.bind([]);
-
-    const deletedIds = [];
-    while (stmt.step()) {
-      const row = stmt.get();
-      if (row[1] && !fs.existsSync(row[1])) {
-        const deleteStmt = db.prepare('DELETE FROM videos WHERE id = ?');
-        deleteStmt.run([row[0]]);
-        deletedIds.push(row[0]);
-      }
-    }
-    stmt.free();
-    saveDatabase();
-
-    res.json({
-      success: true,
-      data: {
-        deletedIds,
-        count: deletedIds.length
-      }
-    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
