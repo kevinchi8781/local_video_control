@@ -12,6 +12,7 @@ interface FolderNode {
   videoCount: number;
   hasChildren: boolean;
   selectable: boolean;
+  key?: string;
   children?: FolderNode[];
 }
 
@@ -56,7 +57,13 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
     }
 
     const res = await folderApi.getChildren(node.id, node.path);
-    return res.data.data as FolderNode[];
+    const children = res.data.data as FolderNode[];
+
+    // 确保子节点有 key
+    return children.map(child => ({
+      ...child,
+      key: `${child.id}-${child.path}`
+    }));
   };
 
   const handleExpand = async (keys: React.Key[], info: any) => {
@@ -109,14 +116,7 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
           key: `${node.id}-${node.path}`,
           selectable: true,
           isLeaf: !node.hasChildren,
-          children: node.children?.map(child => ({
-            ...child,
-            icon: <FolderOutlined />,
-            title: `${child.label} (${child.videoCount || 0})`,
-            key: `${child.id}-${child.path}`,
-            selectable: true,
-            isLeaf: !child.hasChildren
-          }))
+          children: node.children
         }))}
       />
     </div>
