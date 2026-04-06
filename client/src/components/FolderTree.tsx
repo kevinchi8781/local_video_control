@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Tree, Spin } from 'antd';
-const { TreeNode } = Tree;
 import { useQuery } from '@tanstack/react-query';
 import { folderApi } from '../api';
 import { FolderOutlined } from '@ant-design/icons';
@@ -47,7 +46,6 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
   // 初始化树数据
   useEffect(() => {
     if (data) {
-      // 确保 data 是数组
       setTreeData(Array.isArray(data) ? data : []);
     }
   }, [data]);
@@ -60,7 +58,6 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
     const res = await folderApi.getChildren(node.id, node.path);
     const children = res.data.data as FolderNode[];
 
-    // 确保子节点有 key
     return children.map(child => ({
       ...child,
       key: `${child.id}-${child.path}`
@@ -70,11 +67,9 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
   const handleExpand = async (keys: React.Key[], info: any) => {
     setExpandedKeys(keys);
 
-    // 如果是展开节点且是首次展开
     if (info.expanded && info.node.children === undefined) {
       const children = await loadChildren(info.node);
 
-      // 更新树数据
       const updateTreeData = (nodes: FolderNode[]): FolderNode[] => {
         return nodes.map(node => {
           if (node.id === info.node.id) {
@@ -97,25 +92,21 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
     }
   };
 
-  const renderTreeNodes = (nodes: FolderNode[]) => {
-    return nodes.map(node => {
-      const key = `${node.id}-${node.path}`;
-      return (
-        <Tree.TreeNode
-          key={key}
-          title={`${node.label} (${node.videoCount || 0})`}
-          icon={<FolderOutlined />}
-          isLeaf={!node.hasChildren}
-        >
-          {node.children && renderTreeNodes(node.children)}
-        </Tree.TreeNode>
-      );
-    });
-  };
-
   if (isLoading) {
     return <Spin />;
   }
+
+  // 递归转换树数据
+  const transformTreeData = (nodes: FolderNode[]): any[] => {
+    return nodes.map(node => ({
+      key: `${node.id}-${node.path}`,
+      title: `${node.label} (${node.videoCount || 0})`,
+      icon: <FolderOutlined />,
+      isLeaf: !node.hasChildren,
+      selectable: true,
+      children: node.children ? transformTreeData(node.children) : undefined
+    }));
+  };
 
   return (
     <div>
@@ -126,9 +117,8 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
         selectedKeys={selectedKeys}
         onExpand={handleExpand}
         onSelect={handleSelect}
-      >
-        {renderTreeNodes(treeData)}
-      </Tree>
+        treeData={transformTreeData(treeData)}
+      />
     </div>
   );
 }
