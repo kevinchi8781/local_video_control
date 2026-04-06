@@ -58,8 +58,16 @@ export default function CollectionsPage() {
     queryFn: () => collectionApi.getAllCategories()
   });
 
+  // 获取每个分类的视频数量
+  const { data: categoryCountsData } = useQuery({
+    queryKey: ['category-counts', defaultCollectionId],
+    queryFn: () => collectionApi.getCategoryCounts(),
+    enabled: !!defaultCollectionId
+  });
+
   const systemCategories = categoriesData?.data?.data || [];
   const customCategories = customCategoriesData?.data?.data || [];
+  const categoryCounts = categoryCountsData?.data?.data || {};
   // 合并系统分类和自定义分类，去重
   const allCategoryNames = [...new Set([
     ...systemCategories.map((c: any) => c.name),
@@ -102,7 +110,7 @@ export default function CollectionsPage() {
   const renderCategoryTree = (categories: CategoryNode[]): any[] => {
     if (!Array.isArray(categories)) return [];
     return categories.map(cat => ({
-      title: cat.name,
+      title: `${cat.name} ${categoryCounts[cat.name] ? `(${categoryCounts[cat.name]})` : ''}`,
       key: cat.name,
       icon: <FolderOutlined />,
       children: cat.children ? renderCategoryTree(cat.children) : []
@@ -111,11 +119,11 @@ export default function CollectionsPage() {
 
   const categoryTreeData = [
     {
-      title: '全部分类',
+      title: `全部分类 ${videosData?.data?.data?.pagination?.total ? `(${videosData.data.data.pagination.total})` : ''}`,
       key: 'all',
       icon: <FolderOutlined />,
       children: allCategoryNames.map(name => ({
-        title: name,
+        title: `${name} ${categoryCounts[name] ? `(${categoryCounts[name]})` : ''}`,
         key: name,
         icon: <FolderOutlined />
       }))

@@ -18,6 +18,22 @@ router.get('/categories', async (req, res) => {
   }
 });
 
+// GET /api/collections/categories/count - 获取每个分类的视频数量
+router.get('/categories/count', async (req, res) => {
+  try {
+    const counts = await collectionService.getCategoryVideoCounts('default');
+    res.json({
+      success: true,
+      data: counts
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // GET /api/collections/check/:videoId - 检查视频是否已收藏（放在最前面，避免被/:id 拦截）
 router.get('/check/:videoId', async (req, res) => {
   try {

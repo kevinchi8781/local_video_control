@@ -225,6 +225,38 @@ const collectionService = {
     stmt.free();
 
     return Array.from(categories);
+  },
+
+  // 获取每个分类的视频数量
+  async getCategoryVideoCounts(userId = 'default') {
+    const db = await getDatabase();
+    const stmt = db.prepare(`
+      SELECT m.custom_categories
+      FROM video_collection_map m
+      JOIN collections c ON m.collection_id = c.id
+      WHERE c.user_id = ? AND m.custom_categories IS NOT NULL
+    `);
+    stmt.bind([userId]);
+
+    const counts = {};
+    while (stmt.step()) {
+      const row = stmt.get();
+      if (row[0]) {
+        try {
+          const arr = JSON.parse(row[0]);
+          if (Array.isArray(arr)) {
+            arr.forEach(cat => {
+              counts[cat] = (counts[cat] || 0) + 1;
+            });
+          }
+        } catch (e) {
+          // Ignore invalid JSON
+        }
+      }
+    }
+    stmt.free();
+
+    return counts;
   }
 };
 

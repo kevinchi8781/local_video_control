@@ -57,6 +57,7 @@ export const scanApi = {
 export const collectionApi = {
   getAll: () => api.get('/collections'),
   getAllCategories: () => api.get('/collections/categories'),
+  getCategoryCounts: () => api.get('/collections/categories/count'),
   create: (data: { name: string; description?: string }) => api.post('/collections', data),
   update: (id: string, data: { name?: string; description?: string }) => api.put(`/collections/${id}`, data),
   delete: (id: string) => api.delete(`/collections/${id}`),
