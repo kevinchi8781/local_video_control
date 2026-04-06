@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Tree, Spin } from 'antd';
+const { TreeNode } = Tree;
 import { useQuery } from '@tanstack/react-query';
 import { folderApi } from '../api';
 import { FolderOutlined } from '@ant-design/icons';
@@ -96,6 +97,22 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
     }
   };
 
+  const renderTreeNodes = (nodes: FolderNode[]) => {
+    return nodes.map(node => {
+      const key = `${node.id}-${node.path}`;
+      return (
+        <Tree.TreeNode
+          key={key}
+          title={`${node.label} (${node.videoCount || 0})`}
+          icon={<FolderOutlined />}
+          isLeaf={!node.hasChildren}
+        >
+          {node.children && renderTreeNodes(node.children)}
+        </Tree.TreeNode>
+      );
+    });
+  };
+
   if (isLoading) {
     return <Spin />;
   }
@@ -109,16 +126,9 @@ export default function FolderTree({ onFolderSelect }: FolderTreeProps) {
         selectedKeys={selectedKeys}
         onExpand={handleExpand}
         onSelect={handleSelect}
-        treeData={treeData.map(node => ({
-          ...node,
-          icon: <FolderOutlined />,
-          title: `${node.label} (${node.videoCount || 0})`,
-          key: `${node.id}-${node.path}`,
-          selectable: true,
-          isLeaf: !node.hasChildren,
-          children: node.children
-        }))}
-      />
+      >
+        {renderTreeNodes(treeData)}
+      </Tree>
     </div>
   );
 }
