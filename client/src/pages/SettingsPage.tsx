@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Input, Button, Space, Table, message, Modal, Divider, type ColumnsType } from 'antd';
+import { Card, Input, Button, Space, Table, App, Modal, type ColumnsType } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { configApi, videoApi } from '../api';
 import { FolderOutlined, DeleteOutlined, ClearOutlined, SearchOutlined } from '@ant-design/icons';
@@ -16,6 +16,7 @@ interface Config {
 }
 
 export default function SettingsPage() {
+  const { message } = App.useApp();
   const [folderPath, setFolderPath] = useState('');
   const [ffmpegPath, setFfmpegPath] = useState('');
   const queryClient = useQueryClient();
