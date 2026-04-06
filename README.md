@@ -2,6 +2,29 @@
 
 一个基于 Node.js + React 的本地视频文件管理工具，支持文件夹绑定、树形导航、缩略图预览、视频播放和进度记录。
 
+## 快速启动
+
+> 想要在本地快速启动体验？按以下步骤操作：
+
+```bash
+# 1. 确保已安装 Node.js 18+ 和 FFmpeg
+
+# 2. 安装后端依赖并启动
+cd server
+npm install
+npm run dev          # 后端启动在 http://localhost:3001
+
+# 3. 新开一个终端，安装前端依赖并启动
+cd client
+npm install
+npm run dev          # 前端启动在 http://localhost:5173
+
+# 4. 打开浏览器访问 http://localhost:5173
+# 5. 在设置页面绑定视频文件夹
+# 6. 点击"扫描视频库"按钮
+# 7. 开始浏览和播放视频
+```
+
 ## 功能特性
 
 - **文件夹绑定**: 绑定多个本地文件夹作为视频源
