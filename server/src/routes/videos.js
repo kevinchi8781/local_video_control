@@ -3,8 +3,6 @@ const router = express.Router();
 const { getDatabase, saveDatabase } = require('../db/database');
 const fs = require('fs');
 const path = require('path');
-const transcodeService = require('../services/transcodeService');
-const { spawn } = require('child_process');
 
 const CONFIG_FILE = path.join(__dirname, '../../data/config.json');
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.webm', '.mov', '.flv', '.wmv', '.m4v'];
@@ -227,7 +225,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET /api/videos/:id/stream - 视频流（使用 WebM 实时转码）
+// GET /api/videos/:id/stream - 视频流（直接返回原始文件，不转码）
 router.get('/:id/stream', async (req, res) => {
   try {
     const { id } = req.params;
@@ -254,89 +252,7 @@ router.get('/:id/stream', async (req, res) => {
         });
       }
 
-      // 获取 ffmpeg 路径
-      const configFile = path.join(__dirname, '../../data/config.json');
-      let ffmpegPath = 'ffmpeg';
-      if (fs.existsSync(configFile)) {
-        const config = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
-        ffmpegPath = config.ffmpegPath || 'ffmpeg';
-      }
-
-      // 检查是否需要转码
-      const codecs = await transcodeService.detectCodecs(videoPath, ffmpegPath);
-      const needsTranscode =
-        ['hevc', 'h265', 'vp9', 'av1'].includes(codecs.videoCodec.toLowerCase()) ||
-        ['ac3', 'eac3', 'dts', 'truehd'].includes(codecs.audioCodec.toLowerCase());
-
-      console.log(`[Stream] Codecs: video=${codecs.videoCodec}, audio=${codecs.audioCodec}, needsTranscode=${needsTranscode}`);
-
-      if (needsTranscode) {
-
-        const { spawn } = require('child_process');
-
-        // WebM 格式，使用 VP8 编码（兼容性最好）
-        const ffmpegArgs = [
-          '-i', videoPath,
-          '-c:v', 'libvpx',       // VP8 编码
-          '-quality', 'realtime', // 实时模式
-          '-cpu-used', '4',       // 平衡速度和质量（0-8，越小越快）
-          '-b:v', '2000k',        // 视频比特率
-          '-c:a', 'libvorbis',    // Vorbis 音频
-          '-b:a', '128k',
-          '-g', '30',             // 关键帧间隔
-          '-keyint_min', '30',    // 最小关键帧间隔
-          '-f', 'webm',
-          'pipe:1'
-        ];
-
-        const ffmpeg = spawn(ffmpegPath, ffmpegArgs);
-
-        res.setHeader('Content-Type', 'video/webm');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Transfer-Encoding', 'chunked');
-
-        let dataSent = 0;
-        let headersSent = false;
-
-        ffmpeg.stdout.on('data', (data) => {
-          if (!headersSent) {
-            headersSent = true;
-            res.writeHead(200, {
-              'Content-Type': 'video/webm',
-              'Cache-Control': 'no-cache',
-              'Transfer-Encoding': 'chunked'
-            });
-          }
-          dataSent += data.length;
-          res.write(data);
-        });
-
-        ffmpeg.stderr.on('data', (data) => {
-          // 忽略 ffmpeg 的日志输出
-        });
-
-        ffmpeg.on('error', (err) => {
-          if (!res.headersSent) {
-            res.status(500).json({ error: 'ffmpeg 启动失败：' + err.message });
-          }
-        });
-
-        ffmpeg.on('close', (code) => {
-          if (!res.headersSent) {
-            res.status(500).json({ error: '转码失败' });
-          } else {
-            res.end();
-          }
-        });
-
-        res.on('close', () => {
-          ffmpeg.kill('SIGTERM');
-        });
-
-        return;
-      }
-
-      // 不需要转码，直接返回原始文件
+      // 直接返回原始文件，支持 Range 请求（用于拖拽进度）
       const stats = fs.statSync(videoPath);
       const fileSize = stats.size;
       const range = req.headers.range;
@@ -363,9 +279,15 @@ router.get('/:id/stream', async (req, res) => {
         });
         fs.createReadStream(videoPath).pipe(res);
       }
+    } else {
+      stmt.free();
+      res.status(404).json({
+        success: false,
+        error: '视频不存在'
+      });
     }
   } catch (error) {
-    console.error('流媒体错误:', error);
+    console.error('[Stream] Error:', error);
     if (!res.headersSent) {
       res.status(500).json({ success: false, error: error.message });
     } else {
