@@ -1,4 +1,4 @@
-import { Modal, message, Spin, Slider, Button, App, Popconfirm } from 'antd';
+import { Modal, Spin, Slider, Button, App, Popconfirm } from 'antd';
 import {
   PauseCircleOutlined,
   PlayCircleOutlined,
@@ -10,6 +10,7 @@ import {
   VideoCameraOutlined
 } from '@ant-design/icons';
 import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import Artplayer from 'artplayer';
 
 interface VideoPlayerModalProps {
   video: {
@@ -31,256 +32,113 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
-  const [isBuffering, setIsBuffering] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
-  const [loadedVideoId, setLoadedVideoId] = useState<string | number | null>(null);
-  const [potPlayerCalled, setPotPlayerCalled] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
-  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const artplayerContainerRef = useRef<HTMLDivElement>(null);
+  const artplayerRef = useRef<Artplayer | null>(null);
+  const controlsTimeoutRef = useRef<number | null>(null);
   const [showControls, setShowControls] = useState(true);
-
-  // 设置视频 ref 并加载视频
-  const setVideoRef = useCallback((videoEl: HTMLVideoElement | null) => {
-    videoRef.current = videoEl;
-    if (videoEl && video && open && !videoEl.src) {
-      console.log('setVideoRef: Loading video, videoId:', video.id);
-      setIsLoading(true);
-      setPlaybackError(null);
-      setIsBuffering(true);
-
-      const streamUrl = `http://localhost:3001/api/videos/${video.id}/stream`;
-      videoEl.src = streamUrl;
-      videoEl.preload = 'auto';
-      videoEl.volume = volume;
-      videoEl.muted = isMuted;
-
-      const handleLoadedData = async () => {
-        console.log('Video data loaded (setVideoRef), readyState:', videoEl.readyState);
-        try {
-          await videoEl.play();
-          setIsPlaying(true);
-          setIsLoading(false);
-          setIsBuffering(false);
-        } catch (err) {
-          console.log('自动播放等待用户交互:', (err as Error).name);
-          setIsLoading(false);
-          setIsBuffering(false);
-        }
-        videoEl.removeEventListener('loadeddata', handleLoadedData);
-      };
-
-      const handleError = async (e: Event) => {
-        const target = e.target as HTMLVideoElement;
-        const error = target.error;
-
-        // 尝试从视频源 URL 获取详细错误
-        let detailedError = '';
-        if (error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED || error?.code === 4) {
-          try {
-            const response = await fetch(streamUrl);
-            if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}));
-              detailedError = errorData.error || errorData.message || `HTTP ${response.status}`;
-            }
-          } catch (fetchError) {
-            // 忽略 fetch 错误
-          }
-        }
-
-        console.error('Video load error (setVideoRef):', error, {
-          code: error?.code,
-          message: error?.message,
-          detailedError
-        });
-
-        setIsLoading(false);
-        setIsBuffering(false);
-        if (error || detailedError) {
-          const errorMsg = detailedError || ('视频加载失败：' + (error?.message || '未知错误'));
-          // 如果文件不存在，提示用户去清理
-          if (detailedError === '视频文件不存在') {
-            setPlaybackError('视频文件已不存在，请在设置页面清理无效记录');
-          } else {
-            setPlaybackError(errorMsg);
-          }
-        }
-        videoEl.removeEventListener('error', handleError);
-      };
-
-      videoEl.addEventListener('loadeddata', handleLoadedData, { once: true });
-      videoEl.addEventListener('error', handleError, { once: true });
-
-      videoEl.load();
-    }
-  }, [video?.id, open, volume, isMuted]);
-
-  // 调试：监听 video 和 open 的变化
-  useEffect(() => {
-    console.log('VideoPlayerModal render:', { video, open, videoId: video?.id });
-  }, [video, open]);
 
   // 使用 useLayoutEffect 确保在 DOM 渲染后立即执行
   useLayoutEffect(() => {
-    console.log('VideoPlayerModal useLayoutEffect check:', { video, open, hasRef: !!videoRef.current, videoId: video?.id });
-    if (!video || !open || !videoRef.current) {
-      console.log('VideoPlayerModal useLayoutEffect early return:', { videoOk: !!video, openOk: open, refOk: !!videoRef.current });
+    if (!video || !open) {
       return;
     }
 
-    console.log('VideoPlayerModal useLayoutEffect: video=', video, 'open=', open, 'video.id=', video.id);
+    const container = artplayerContainerRef.current;
+    if (!container) {
+      return;
+    }
 
-    const videoEl = videoRef.current;
+    // 清理旧的实例
+    if (artplayerRef.current) {
+      artplayerRef.current.destroy();
+      artplayerRef.current = null;
+    }
+
     const streamUrl = `http://localhost:3001/api/videos/${video.id}/stream`;
-
-    console.log('Loading video (layout):', video.id, streamUrl);
     setIsLoading(true);
     setPlaybackError(null);
-    setIsBuffering(true);
 
-    // 先尝试在浏览器播放
-    videoEl.src = streamUrl;
-    videoEl.preload = 'auto';
-    videoEl.load();
+    const art = new Artplayer({
+      container: container,
+      url: streamUrl,
+      autoplay: true,
+      theme: '#722ed1',
+      playbackRate: true,
+      hotkey: true,
+      pip: true,
+      fullscreen: true,
+      setting: true,
+      type: 'auto',
+    });
 
-    // 应用当前音量设置（保持上一个视频的设置）
-    videoEl.volume = volume;
-    videoEl.muted = isMuted;
+    artplayerRef.current = art;
 
-    // 监听 loadeddata 事件，数据加载完成后自动播放
-    const handleLoadedData = async () => {
-      console.log('Video data loaded, readyState:', videoEl.readyState);
-      try {
-        await videoEl.play();
+    // 监听播放事件
+    art.on('play', () => {
+      setIsPlaying(true);
+      setIsLoading(false);
+    });
+
+    art.on('pause', () => {
+      setIsPlaying(false);
+    });
+
+    // 监听视频元素
+    art.on('ready', () => {
+      const video = art.video;
+      setDuration(video.duration);
+
+      video.addEventListener('timeupdate', () => {
+        setCurrentTime(video.currentTime);
+      });
+
+      video.addEventListener('waiting', () => {
+        setIsLoading(true);
+      });
+
+      video.addEventListener('playing', () => {
+        setIsLoading(false);
         setIsPlaying(true);
-        setIsLoading(false);
-        setIsBuffering(false);
-      } catch (err) {
-        // 自动播放被阻止是正常现象，等待用户手动点击
-        console.log('自动播放等待用户交互:', (err as Error).name);
-        setIsLoading(false);
-        setIsBuffering(false);
-      }
-    };
+      });
+
+      video.addEventListener('ended', () => {
+        setIsPlaying(false);
+        setCurrentTime(0);
+      });
+    });
 
     // 监听错误
-    const handleError = (e: Event) => {
-      const target = e.target as HTMLVideoElement;
-      console.error('Video load error:', target.error);
+    art.on('error', (err: unknown) => {
+      console.error('ArtPlayer error:', err);
       setIsLoading(false);
-      setIsBuffering(false);
-      if (target.error) {
-        setPlaybackError('视频加载失败：' + target.error.message);
-      }
-    };
+      setPlaybackError('视频无法播放，请使用 PotPlayer');
+    });
 
-    // 监听 canplay 事件
-    const handleCanPlay = () => {
-      console.log('Video can play, readyState:', videoEl.readyState);
+    // 监听 canplay
+    art.on('canplay', () => {
       setIsLoading(false);
-      setIsBuffering(false);
-    };
-
-    videoEl.addEventListener('loadeddata', handleLoadedData, { once: true });
-    videoEl.addEventListener('error', handleError, { once: true });
-    videoEl.addEventListener('canplay', handleCanPlay, { once: true });
+    });
 
     return () => {
-      videoEl.removeEventListener('loadeddata', handleLoadedData);
-      videoEl.removeEventListener('error', handleError);
-      videoEl.removeEventListener('canplay', handleCanPlay);
-    };
-  }, [video?.id, open]);
-
-  // 弹窗打开且 videoRef 就绪时加载视频（备用）
-  useEffect(() => {
-    if (!video || !open) {
-      console.log('useEffect: skipping, video or open is false');
-      return;
-    }
-
-    // 等待 videoRef 就绪
-    if (!videoRef.current) {
-      console.log('useEffect: videoRef not ready, waiting...');
-      return;
-    }
-
-    const videoEl = videoRef.current;
-    // 如果 src 已经设置，说明已经加载过了
-    if (videoEl.src) {
-      console.log('useEffect: src already set, skipping');
-      return;
-    }
-
-    console.log('useEffect: Loading video, videoId:', video.id);
-    setIsLoading(true);
-    setPlaybackError(null);
-    setIsBuffering(true);
-
-    const streamUrl = `http://localhost:3001/api/videos/${video.id}/stream`;
-    videoEl.src = streamUrl;
-    videoEl.preload = 'auto';
-    videoEl.load();
-
-    // 应用当前音量设置
-    videoEl.volume = volume;
-    videoEl.muted = isMuted;
-
-    // 添加事件监听器
-    const handleLoadedData = async () => {
-      console.log('Video data loaded (useEffect), readyState:', videoEl.readyState);
-      try {
-        await videoEl.play();
-        setIsPlaying(true);
-        setIsLoading(false);
-        setIsBuffering(false);
-      } catch (err) {
-        console.log('自动播放等待用户交互:', (err as Error).name);
-        setIsLoading(false);
-        setIsBuffering(false);
+      if (art) {
+        art.destroy();
       }
-      videoEl.removeEventListener('loadeddata', handleLoadedData);
-    };
-
-    const handleError = (e: Event) => {
-      const target = e.target as HTMLVideoElement;
-      console.error('Video load error (useEffect):', target.error);
-      setIsLoading(false);
-      setIsBuffering(false);
-      if (target.error) {
-        setPlaybackError('视频加载失败：' + target.error.message);
-      }
-      videoEl.removeEventListener('error', handleError);
-    };
-
-    videoEl.addEventListener('loadeddata', handleLoadedData, { once: true });
-    videoEl.addEventListener('error', handleError, { once: true });
-
-    return () => {
-      videoEl.removeEventListener('loadeddata', handleLoadedData);
-      videoEl.removeEventListener('error', handleError);
-    };
-  }, [video?.id, open]);
-
-  // 清理函数
-  useEffect(() => {
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.src = '';
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
       }
     };
-  }, []);
+  }, [video?.id, open, onClose]);
 
-  // 关闭时重置状态
+  // 关闭时重置状态并清理 ArtPlayer
   useEffect(() => {
     if (!open) {
       setIsPlaying(false);
       setCurrentTime(0);
       setIsFullscreen(false);
-      setIsBuffering(false);
-      if (videoRef.current) {
-        videoRef.current.pause();
+      if (artplayerRef.current) {
+        artplayerRef.current.pause();
       }
     }
   }, [open]);
@@ -307,230 +165,52 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
         }
         return;
       }
-      if (e.key === ' ') {
-        e.preventDefault();
-        if (videoRef.current?.paused) {
-          videoRef.current.play();
-        } else {
-          videoRef.current.pause();
-        }
-        return;
-      }
-      if (e.key === 'ArrowLeft') {
-        if (videoRef.current) {
-          videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 10);
-        }
-        return;
-      }
-      if (e.key === 'ArrowRight') {
-        if (videoRef.current) {
-          videoRef.current.currentTime = Math.min(duration, videoRef.current.currentTime + 10);
-        }
-        return;
-      }
+      // ArtPlayer 已内置空格和方向键支持，这里不需要重复实现
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose, duration]);
+  }, [open, onClose]);
 
   const togglePlay = () => {
-    if (!videoRef.current) return;
+    if (!artplayerRef.current) return;
 
-    const videoEl = videoRef.current;
-
-    // 检查传入的 video prop 是否有 id
-    console.log('togglePlay called:', {
-      readyState: videoEl.readyState,
-      src: videoEl.src ? 'set' : 'not set',
-      videoPropId: video?.id,
-      open: open
-    });
-
-    // 如果视频还没有加载，先加载
-    if (!videoEl.src) {
-      console.log('Video src not set, setting src and loading...');
-      setIsLoading(true);
-      setPlaybackError(null);
-      setIsBuffering(true);
-
-      // 使用传入的 video prop 的 id
-      const videoId = video?.id;
-      console.log('Using videoId:', videoId);
-
-      if (!videoId) {
-        console.error('video.id is empty or undefined!');
-        setPlaybackError('视频 ID 为空，无法播放');
-        setIsLoading(false);
-        setIsBuffering(false);
-        return;
-      }
-
-      const streamUrl = `http://localhost:3001/api/videos/${videoId}/stream`;
-      console.log('Setting video src to:', streamUrl);
-      videoEl.src = streamUrl;
-      videoEl.preload = 'auto';
-      videoEl.volume = volume;
-      videoEl.muted = isMuted;
-
-      // 添加事件监听器
-      const handleLoadedData = async () => {
-        console.log('Video data loaded (from togglePlay), readyState:', video.readyState);
-        try {
-          await video.play();
-          setIsPlaying(true);
-          setIsLoading(false);
-          setIsBuffering(false);
-        } catch (err) {
-          console.log('自动播放等待用户交互:', (err as Error).name);
-          setIsLoading(false);
-          setIsBuffering(false);
-        }
-        video.removeEventListener('loadeddata', handleLoadedData);
-      };
-
-      const handleError = (e: Event) => {
-        const target = e.target as HTMLVideoElement;
-        console.error('Video load error (from togglePlay):', target.error);
-        setIsLoading(false);
-        setIsBuffering(false);
-        if (target.error) {
-          setPlaybackError('视频加载失败：' + target.error.message);
-        }
-        video.removeEventListener('error', handleError);
-      };
-
-      video.addEventListener('loadeddata', handleLoadedData, { once: true });
-      video.addEventListener('error', handleError, { once: true });
-
-      video.load();
-      return;
-    }
-
-    // readyState 0 = HAVE_NOTHING, 1 = HAVE_METADATA, 2 = HAVE_CURRENT_DATA, 3 = HAVE_FUTURE_DATA, 4 = HAVE_ENOUGH_DATA
-    if (video.readyState < 2) {
-      console.log('Video not ready yet (readyState=' + video.readyState + '), waiting for loadeddata...');
-      // 视频数据还不足，触发 load 并等待 loadeddata 事件自动播放
-      setIsLoading(true);
-      video.load();
-      return;
-    }
-
-    if (video.paused) {
-      video.play().catch((err) => {
-        if (err.name === 'NotSupportedError') {
-          setPlaybackError('此视频格式不支持');
-          message.error('视频格式不支持');
-        }
-        console.log('Play error:', err.name);
-      });
-      setIsPlaying(true);
-    } else {
-      video.pause();
+    if (artplayerRef.current.playing) {
+      artplayerRef.current.pause();
       setIsPlaying(false);
+    } else {
+      artplayerRef.current.play();
+      setIsPlaying(true);
     }
-  };
-
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
-    }
-  };
-
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration);
-      setIsLoading(false);
-      // 不再这里自动播放，由 useEffect 中的 play() 处理
-    }
-  };
-
-  const handleCanPlay = () => {
-    setIsLoading(false);
-    setIsBuffering(false);
-  };
-
-  const handleWaiting = () => {
-    setIsBuffering(true);
-  };
-
-  const handlePlaying = () => {
-    setIsLoading(false);
-    setIsBuffering(false);
-    setIsPlaying(true);
-  };
-
-  const handlePause = () => {
-    setIsPlaying(false);
-  };
-
-  const handleProgress = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    // 无需处理
-  };
-
-  const handleError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    const v = e.currentTarget;
-    let errorMsg = '视频加载失败';
-
-    if (v.error) {
-      switch (v.error.code) {
-        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-          errorMsg = '视频格式不支持';
-          break;
-        case MediaError.MEDIA_ERR_NETWORK:
-          errorMsg = '网络错误';
-          break;
-        case MediaError.MEDIA_ERR_DECODE:
-          errorMsg = '视频解码失败';
-          break;
-        case MediaError.MEDIA_ERR_ABORTED:
-          return;
-      }
-    }
-
-    setPlaybackError(errorMsg);
-    setIsLoading(false);
-    setIsBuffering(false);
-
-    // 不再这里调用 PotPlayer，由 useEffect 中的超时逻辑统一处理
   };
 
   const handleSeek = (value: number) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = value;
+    if (artplayerRef.current) {
+      artplayerRef.current.seek = value;
       setCurrentTime(value);
     }
   };
 
   const toggleMute = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
+    if (!artplayerRef.current) return;
+
+    artplayerRef.current.muted = !isMuted;
+    setIsMuted(!isMuted);
   };
 
   const handleVolumeChange = useCallback((value: number) => {
-    if (videoRef.current) {
-      videoRef.current.volume = value;
+    if (artplayerRef.current) {
+      artplayerRef.current.volume = value;
       setVolume(value);
       setIsMuted(value === 0);
     }
   }, []);
 
-  const handleVolumeAfterChange = () => {
-    // 音量调节完成后不需要做什么
-  };
-
   const toggleFullscreen = () => {
-    if (!playerContainerRef.current) return;
+    if (!artplayerRef.current) return;
 
-    if (!document.fullscreenElement) {
-      playerContainerRef.current.requestFullscreen().catch((err) => {
-        message.error('全屏失败：' + err.message);
-      });
-    } else {
-      document.exitFullscreen();
-    }
+    // 使用 ArtPlayer 的全屏 API
+    artplayerRef.current.fullscreen = !artplayerRef.current.fullscreen;
   };
 
   const handleMouseMove = () => {
@@ -572,6 +252,7 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
         message.error('删除失败：' + data.error);
       }
     } catch (err) {
+      console.error('HandleDelete error:', err);
       message.error('删除失败');
     }
   };
@@ -590,11 +271,14 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
         message.error('调用 PotPlayer 失败');
       }
     } catch (err) {
+      console.error('HandleSwitchToPotPlayer error:', err);
       message.error('调用 PotPlayer 失败');
     }
   };
 
   const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!artplayerRef.current) return;
+
     const rect = playerContainerRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -602,13 +286,14 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
     const third = rect.width / 3;
 
     if (x < third) {
-      if (videoRef.current) {
-        videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 10);
-      }
+      // 左侧三分之一 - 快退 10 秒
+      artplayerRef.current.seek = Math.max(0, artplayerRef.current.currentTime - 10);
     } else if (x > 2 * third) {
-      if (videoRef.current) {
-        videoRef.current.currentTime = Math.min(duration, videoRef.current.currentTime + 10);
-      }
+      // 右侧三分之一 - 快进 10 秒
+      artplayerRef.current.seek = Math.min(duration, artplayerRef.current.currentTime + 10);
+    } else {
+      // 中间三分之一 - 切换播放暂停
+      togglePlay();
     }
   };
 
@@ -662,41 +347,25 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
             color: '#fff',
             textAlign: 'center'
           }}>
-            <p>{playbackError}</p>
-            <p style={{ fontSize: 12, color: '#999', marginTop: 8 }}>提示：请尝试重新扫描视频以进行转码</p>
+            <p style={{ fontSize: 16, marginBottom: 16 }}>{playbackError}</p>
+            <Button
+              type="primary"
+              icon={<VideoCameraOutlined />}
+              onClick={() => handleSwitchToPotPlayer()}
+              size="large"
+            >
+              使用 PotPlayer 播放
+            </Button>
           </div>
         )}
 
-        <video
-          ref={setVideoRef}
+        {/* ArtPlayer container */}
+        <div
+          ref={artplayerContainerRef}
           style={{
             width: '100%',
-            height: '100%',
-            cursor: 'pointer'
+            height: '100%'
           }}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          onCanPlay={(e) => {
-            console.log('Video can play', e.currentTarget.readyState);
-            handleCanPlay();
-          }}
-          onLoadedData={(e) => {
-            console.log('Video data loaded, ready state:', e.currentTarget.readyState);
-          }}
-          onWaiting={handleWaiting}
-          onPlaying={handlePlaying}
-          onPause={handlePause}
-          onProgress={handleProgress}
-          onError={(e) => {
-            console.error('Video error:', e);
-            handleError(e);
-          }}
-          onEnded={() => {
-            setIsPlaying(false);
-            setCurrentTime(0);
-          }}
-          onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-          onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
         />
 
         {isFullscreen && (
@@ -795,8 +464,8 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
                 onOpenChange={(visible) => {
                   if (visible) {
                     // 暂停视频
-                    if (videoRef.current && isPlaying) {
-                      videoRef.current.pause();
+                    if (artplayerRef.current && isPlaying) {
+                      artplayerRef.current.pause();
                     }
                   }
                 }}
