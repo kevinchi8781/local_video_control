@@ -70,13 +70,40 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
         videoEl.removeEventListener('loadeddata', handleLoadedData);
       };
 
-      const handleError = (e: Event) => {
+      const handleError = async (e: Event) => {
         const target = e.target as HTMLVideoElement;
-        console.error('Video load error (setVideoRef):', target.error);
+        const error = target.error;
+
+        // 尝试从视频源 URL 获取详细错误
+        let detailedError = '';
+        if (error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED || error?.code === 4) {
+          try {
+            const response = await fetch(streamUrl);
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              detailedError = errorData.error || errorData.message || `HTTP ${response.status}`;
+            }
+          } catch (fetchError) {
+            // 忽略 fetch 错误
+          }
+        }
+
+        console.error('Video load error (setVideoRef):', error, {
+          code: error?.code,
+          message: error?.message,
+          detailedError
+        });
+
         setIsLoading(false);
         setIsBuffering(false);
-        if (target.error) {
-          setPlaybackError('视频加载失败：' + target.error.message);
+        if (error || detailedError) {
+          const errorMsg = detailedError || ('视频加载失败：' + (error?.message || '未知错误'));
+          // 如果文件不存在，提示用户去清理
+          if (detailedError === '视频文件不存在') {
+            setPlaybackError('视频文件已不存在，请在设置页面清理无效记录');
+          } else {
+            setPlaybackError(errorMsg);
+          }
         }
         videoEl.removeEventListener('error', handleError);
       };
