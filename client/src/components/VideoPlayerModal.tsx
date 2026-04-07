@@ -203,31 +203,48 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
       styles={{ body: { padding: 0, background: '#000' } }}
       closeIcon={null}
       mask={{ closable: false }}
-      title={
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ color: '#fff', fontSize: 16 }}>{video.filename}</span>
-          <Popconfirm
-            title="确定要删除这个视频吗？"
-            onConfirm={handleDelete}
-            okText="确定"
-            cancelText="取消"
-            placement="left"
-          >
-            <Button
-              danger
-              icon={<DeleteOutlined />}
-              size="small"
-              style={{ marginLeft: 16 }}
-            >
-              删除视频
-            </Button>
-          </Popconfirm>
-        </div>
-      }
       styles={{
         body: { padding: 0, background: '#000' },
         header: { background: '#141414', borderBottom: '1px solid #303030', padding: '12px 24px' }
       }}
+      title={
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ color: '#fff', fontSize: 16 }}>{video.filename}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              icon={<VideoCameraOutlined />}
+              onClick={() => handleSwitchToPotPlayer()}
+              size="small"
+              style={{ background: '#722ed1', borderColor: '#722ed1', color: '#fff' }}
+            >
+              PotPlayer
+            </Button>
+            <Popconfirm
+              title="确定要删除这个视频吗？"
+              onConfirm={handleDelete}
+              okText="确定"
+              cancelText="取消"
+              placement="left"
+            >
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                size="small"
+              >
+                删除
+              </Button>
+            </Popconfirm>
+            <Button
+              icon={<CloseOutlined />}
+              onClick={onClose}
+              size="small"
+              style={{ marginLeft: 8 }}
+            >
+              关闭
+            </Button>
+          </div>
+        </div>
+      }
     >
       <div
         ref={playerContainerRef}
