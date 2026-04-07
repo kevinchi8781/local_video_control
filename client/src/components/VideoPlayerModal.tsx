@@ -203,6 +203,31 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
       styles={{ body: { padding: 0, background: '#000' } }}
       closeIcon={null}
       mask={{ closable: false }}
+      title={
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ color: '#fff', fontSize: 16 }}>{video.filename}</span>
+          <Popconfirm
+            title="确定要删除这个视频吗？"
+            onConfirm={handleDelete}
+            okText="确定"
+            cancelText="取消"
+            placement="left"
+          >
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              style={{ marginLeft: 16 }}
+            >
+              删除视频
+            </Button>
+          </Popconfirm>
+        </div>
+      }
+      styles={{
+        body: { padding: 0, background: '#000' },
+        header: { background: '#141414', borderBottom: '1px solid #303030', padding: '12px 24px' }
+      }}
     >
       <div
         ref={playerContainerRef}
