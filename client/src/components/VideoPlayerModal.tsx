@@ -74,6 +74,8 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
         fullscreen: true,
         setting: true,
         type: 'auto',
+        locked: true, // 隐藏默认播放按钮，使用自定义控制栏
+        miniProgressBar: false,
       });
 
       artplayerRef.current = art;
