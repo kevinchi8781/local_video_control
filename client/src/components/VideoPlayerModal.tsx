@@ -9,7 +9,7 @@ import {
   DeleteOutlined,
   VideoCameraOutlined
 } from '@ant-design/icons';
-import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Artplayer from 'artplayer';
 
 interface VideoPlayerModalProps {
@@ -39,91 +39,96 @@ export default function VideoPlayerModal({ video, open, onClose, onVideoDeleted 
   const controlsTimeoutRef = useRef<number | null>(null);
   const [showControls, setShowControls] = useState(true);
 
-  // 使用 useLayoutEffect 确保在 DOM 渲染后立即执行
-  useLayoutEffect(() => {
+  // Use useEffect with delay to allow Ant Design Modal portal to mount
+  useEffect(() => {
     if (!video || !open) {
       return;
     }
 
-    const container = artplayerContainerRef.current;
-    if (!container) {
-      return;
-    }
+    // Wait for portal to mount
+    const timer = setTimeout(() => {
+      const container = artplayerContainerRef.current;
+      if (!container) {
+        console.error('Artplayer container not found - Modal portal may not have mounted');
+        return;
+      }
 
-    // 清理旧的实例
-    if (artplayerRef.current) {
-      artplayerRef.current.destroy();
-      artplayerRef.current = null;
-    }
+      // 清理旧的实例
+      if (artplayerRef.current) {
+        artplayerRef.current.destroy();
+        artplayerRef.current = null;
+      }
 
-    const streamUrl = `http://localhost:3001/api/videos/${video.id}/stream`;
-    setIsLoading(true);
-    setPlaybackError(null);
+      const streamUrl = `http://localhost:3001/api/videos/${video.id}/stream`;
+      setIsLoading(true);
+      setPlaybackError(null);
 
-    const art = new Artplayer({
-      container: container,
-      url: streamUrl,
-      autoplay: true,
-      theme: '#722ed1',
-      playbackRate: true,
-      hotkey: true,
-      pip: true,
-      fullscreen: true,
-      setting: true,
-      type: 'auto',
-    });
-
-    artplayerRef.current = art;
-
-    // 监听播放事件
-    art.on('play', () => {
-      setIsPlaying(true);
-      setIsLoading(false);
-    });
-
-    art.on('pause', () => {
-      setIsPlaying(false);
-    });
-
-    // 监听视频元素
-    art.on('ready', () => {
-      const video = art.video;
-      setDuration(video.duration);
-
-      video.addEventListener('timeupdate', () => {
-        setCurrentTime(video.currentTime);
+      const art = new Artplayer({
+        container: container,
+        url: streamUrl,
+        autoplay: true,
+        theme: '#722ed1',
+        playbackRate: true,
+        hotkey: true,
+        pip: true,
+        fullscreen: true,
+        setting: true,
+        type: 'auto',
       });
 
-      video.addEventListener('waiting', () => {
-        setIsLoading(true);
-      });
+      artplayerRef.current = art;
 
-      video.addEventListener('playing', () => {
-        setIsLoading(false);
+      // 监听播放事件
+      art.on('play', () => {
         setIsPlaying(true);
+        setIsLoading(false);
       });
 
-      video.addEventListener('ended', () => {
+      art.on('pause', () => {
         setIsPlaying(false);
-        setCurrentTime(0);
       });
-    });
 
-    // 监听错误
-    art.on('error', (err: unknown) => {
-      console.error('ArtPlayer error:', err);
-      setIsLoading(false);
-      setPlaybackError('视频无法播放，请使用 PotPlayer');
-    });
+      // 监听视频元素
+      art.on('ready', () => {
+        const video = art.video;
+        setDuration(video.duration);
 
-    // 监听 canplay
-    art.on('canplay', () => {
-      setIsLoading(false);
-    });
+        video.addEventListener('timeupdate', () => {
+          setCurrentTime(video.currentTime);
+        });
+
+        video.addEventListener('waiting', () => {
+          setIsLoading(true);
+        });
+
+        video.addEventListener('playing', () => {
+          setIsLoading(false);
+          setIsPlaying(true);
+        });
+
+        video.addEventListener('ended', () => {
+          setIsPlaying(false);
+          setCurrentTime(0);
+        });
+      });
+
+      // 监听错误
+      art.on('error', (err: unknown) => {
+        console.error('ArtPlayer error:', err);
+        setIsLoading(false);
+        setPlaybackError('视频无法播放，请使用 PotPlayer');
+      });
+
+      // 监听 canplay
+      art.on('canplay', () => {
+        setIsLoading(false);
+      });
+    }, 0);
 
     return () => {
-      if (art) {
-        art.destroy();
+      clearTimeout(timer);
+      if (artplayerRef.current) {
+        artplayerRef.current.destroy();
       }
       if (controlsTimeoutRef.current) {
         clearTimeout(controlsTimeoutRef.current);
