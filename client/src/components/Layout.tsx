@@ -35,17 +35,18 @@ export default function Layout() {
     if (isSyncing) return;
 
     setIsSyncing(true);
-    setScanProgress({ processed: 0, total: 0, new: 0, updated: 0 });
+    // 立即显示进度条，初始状态
+    setScanProgress({ processed: 0, total: 100, new: 0, updated: 0, phase: 'starting' });
 
     let hasShownMessage = false;
 
     try {
       const response = await fetch('/api/scan', { method: 'POST' });
       if (response.ok) {
-        // 等待 100ms 让后端开始扫描并更新状态
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // 缩短等待时间到 50ms
+        await new Promise(resolve => setTimeout(resolve, 50));
 
-        // 快速轮询扫描状态（200ms 一次）
+        // 快速轮询扫描状态（150ms 一次）
         pollIntervalRef.current = setInterval(async () => {
           try {
             const statusRes = await fetch('/api/scan/status');
@@ -55,7 +56,7 @@ export default function Layout() {
 
             setScanProgress({
               processed: data.processed || 0,
-              total: data.total || 0,
+              total: data.total || 1,
               new: data.new || 0,
               updated: data.updated || 0
             });
@@ -147,12 +148,18 @@ export default function Layout() {
               <Progress
                 percent={scanProgress.total > 0 ? Math.round((scanProgress.processed / scanProgress.total) * 100) : 100}
                 size="small"
-                status={scanProgress.total === 0 && scanProgress.processed === 0 ? 'normal' : 'active'}
+                status={scanProgress.processed === 0 && scanProgress.total === 0 ? 'normal' : 'active'}
                 format={() => {
-                  if (scanProgress.total === 0) {
+                  // 扫描完成
+                  if (!isSyncing || (scanProgress.processed > 0 && scanProgress.total > 0 && scanProgress.processed >= scanProgress.total)) {
                     return '扫描完成';
                   }
-                  const phaseText = `[${scanProgress.processed}/${scanProgress.total}]`;
+                  // 刚开始扫描
+                  if (scanProgress.processed === 0 && scanProgress.total === 100) {
+                    return '准备扫描...';
+                  }
+                  // 正常进度
+                  const phaseText = scanProgress.total > 0 ? `[${scanProgress.processed}/${scanProgress.total}]` : '';
                   const countText = scanProgress.new > 0 ? `(新：${scanProgress.new})` : '';
                   return `${phaseText} ${countText}`.trim();
                 }}
