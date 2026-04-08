@@ -48,28 +48,36 @@ function getVideoDuration(filePath, ffmpegPath) {
   return null;
 }
 
-// 生成缩略图（优化：直接截取第 1 秒，不先获取时长）
-async function generateThumbnail(filePath, ffmpegPath) {
+// 生成缩略图和时长（一次性获取，避免两次 ffmpeg 调用）
+async function generateThumbnailAndDuration(filePath, ffmpegPath) {
   try {
+    // 先获取视频时长
+    const duration = getVideoDuration(filePath, ffmpegPath);
+    if (!duration) return { duration: null, thumbnail: null };
+
+    // 计算截取位置：20% 处，最少 5 秒，最多 60 秒
+    const seekTime = Math.min(60, Math.max(5, duration * 0.2));
+    const timestamp = seekTime.toFixed(2); // 直接用秒数，不需要时分秒格式
+
     const thumbnailName = md5(filePath) + '.jpg';
     const thumbnailPath = path.join(THUMBNAIL_DIR, thumbnailName);
 
     // 如果缩略图已存在，直接返回
     if (fs.existsSync(thumbnailPath)) {
-      return thumbnailName;
+      return { duration, thumbnail: thumbnailName };
     }
 
     // 使用 ffmpeg 快速生成缩略图（-ss 在 -i 前面，关键帧跳转）
-    const cmd = `"${ffmpegPath}" -ss 1 -i "${filePath}" -vframes 1 -vf scale=320:180 -y "${thumbnailPath}"`;
+    const cmd = `"${ffmpegPath}" -ss ${timestamp} -i "${filePath}" -vframes 1 -vf scale=320:180 -y "${thumbnailPath}"`;
     execSync(cmd, { stdio: 'pipe' });
 
     if (fs.existsSync(thumbnailPath)) {
-      return thumbnailName;
+      return { duration, thumbnail: thumbnailName };
     }
   } catch (error) {
     console.error(`生成缩略图失败 ${filePath}:`, error.message);
   }
-  return null;
+  return { duration: null, thumbnail: null };
 }
 
 // 格式化文件大小
@@ -311,8 +319,7 @@ async function executeScan() {
       scanState.currentFile = `正在生成缩略图：${path.basename(videoPath)}`;
 
       try {
-        const duration = getVideoDuration(videoPath, ffmpegPath);
-        const thumbnail = await generateThumbnail(videoPath, ffmpegPath);
+        const result = await generateThumbnailAndDuration(videoPath, ffmpegPath);
 
         // 更新记录
         const updateStmt = db.prepare(`
@@ -321,7 +328,7 @@ async function executeScan() {
             thumbnail_path = ?
           WHERE path = ?
         `);
-        updateStmt.run([duration, thumbnail, videoPath]);
+        updateStmt.run([result.duration, result.thumbnail, videoPath]);
         updateStmt.free();
 
         console.log(`  处理完成：${videoPath}`);
@@ -357,7 +364,7 @@ async function executeScan() {
 module.exports = {
   isVideoFile,
   getVideoDuration,
-  generateThumbnail,
+  generateThumbnailAndDuration,
   formatFileSize,
   formatDuration,
   scanFolder,
