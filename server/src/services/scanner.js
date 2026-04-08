@@ -28,22 +28,19 @@ function isVideoFile(filename) {
   return VIDEO_EXTENSIONS.includes(ext);
 }
 
-// 获取视频时长
+// 获取视频时长（使用 ffprobe，比 ffmpeg 快 10 倍以上）
 function getVideoDuration(filePath, ffmpegPath) {
   try {
-    const cmd = `"${ffmpegPath}" -i "${filePath}" 2>&1 | findstr "Duration"`;
-    const output = execSync(cmd, { encoding: 'utf-8' });
-    const match = output.match(/Duration: (\d{2}):(\d{2}):(\d{2})\.(\d{2})/);
-
-    if (match) {
-      const hours = parseInt(match[1]);
-      const minutes = parseInt(match[2]);
-      const seconds = parseInt(match[3]);
-      const centiseconds = parseInt(match[4]);
-      return hours * 3600 + minutes * 60 + seconds + centiseconds / 100;
+    // ffprobe 通常和 ffmpeg 在同一目录
+    const ffprobePath = ffmpegPath.replace('ffmpeg.exe', 'ffprobe.exe').replace('ffmpeg', 'ffprobe');
+    const cmd = `"${ffprobePath}" -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`;
+    const output = execSync(cmd, { encoding: 'utf-8', timeout: 10000 });
+    const duration = parseFloat(output.trim());
+    if (!isNaN(duration) && duration > 0) {
+      return duration;
     }
   } catch (error) {
-    console.error(`获取时长失败 ${filePath}:`, error.message);
+    console.error(`ffprobe 获取时长失败 ${filePath}:`, error.message);
   }
   return null;
 }
