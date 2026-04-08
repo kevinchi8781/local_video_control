@@ -146,6 +146,11 @@ function getScanState() {
   return { ...scanState };
 }
 
+// 设置扫描状态（供外部初始化）
+function setScanState(partialState) {
+  scanState = { ...scanState, ...partialState };
+}
+
 // 执行扫描（支持增量）
 async function executeScan() {
   const configFile = path.join(__dirname, '../../data/config.json');
@@ -372,5 +377,6 @@ module.exports = {
   scanFolder,
   executeScan,
   getScanState,
+  setScanState,
   getFfmpegPath
 };

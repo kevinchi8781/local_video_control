@@ -6,6 +6,20 @@ const { executeScan, getScanState } = require('../services/scanner');
 router.post('/', async (req, res) => {
   try {
     console.log('收到扫描请求');
+
+    // 先更新扫描状态，让前端轮询时能立即看到扫描中
+    const { setScanState } = require('../services/scanner');
+    setScanState({
+      isScanning: true,
+      currentPhase: 'scanning',
+      processed: 0,
+      total: 0,
+      new: 0,
+      updated: 0,
+      skipped: 0,
+      currentFile: '准备扫描...'
+    });
+
     res.json({
       success: true,
       message: '扫描已开始'
