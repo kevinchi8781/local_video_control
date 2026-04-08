@@ -48,21 +48,9 @@ function getVideoDuration(filePath, ffmpegPath) {
   return null;
 }
 
-// 生成缩略图
+// 生成缩略图（优化：直接截取第 1 秒，不先获取时长）
 async function generateThumbnail(filePath, ffmpegPath) {
   try {
-    // 获取视频时长
-    const duration = getVideoDuration(filePath, ffmpegPath);
-    if (!duration) return null;
-
-    // 截取 10% 位置的帧，避免片头黑屏
-    const seekTime = Math.max(1, duration * 0.1);
-    const hours = Math.floor(seekTime / 3600);
-    const minutes = Math.floor((seekTime % 3600) / 60);
-    const seconds = (seekTime % 60).toFixed(3);
-    const timestamp = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${seconds.padStart(6, '0')}`;
-
-    // 生成缩略图文件名（使用路径的 MD5）
     const thumbnailName = md5(filePath) + '.jpg';
     const thumbnailPath = path.join(THUMBNAIL_DIR, thumbnailName);
 
@@ -71,8 +59,8 @@ async function generateThumbnail(filePath, ffmpegPath) {
       return thumbnailName;
     }
 
-    // 使用 ffmpeg 生成缩略图
-    const cmd = `"${ffmpegPath}" -ss ${timestamp} -i "${filePath}" -vframes 1 -vf scale=320:180 -y "${thumbnailPath}"`;
+    // 使用 ffmpeg 快速生成缩略图（-ss 在 -i 前面，关键帧跳转）
+    const cmd = `"${ffmpegPath}" -ss 1 -i "${filePath}" -vframes 1 -vf scale=320:180 -y "${thumbnailPath}"`;
     execSync(cmd, { stdio: 'pipe' });
 
     if (fs.existsSync(thumbnailPath)) {
