@@ -42,11 +42,16 @@ export default function Layout() {
     try {
       const response = await fetch('/api/scan', { method: 'POST' });
       if (response.ok) {
+        // 等待 100ms 让后端开始扫描并更新状态
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         // 快速轮询扫描状态（200ms 一次）
         pollIntervalRef.current = setInterval(async () => {
           try {
             const statusRes = await fetch('/api/scan/status');
             const { data } = await statusRes.json();
+
+            console.log('[Scan Status]', data);
 
             setScanProgress({
               processed: data.processed || 0,
@@ -140,10 +145,14 @@ export default function Layout() {
           {isSyncing && scanProgress && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 250 }}>
               <Progress
-                percent={Math.round((scanProgress.processed / (scanProgress.total || 1)) * 100)}
+                percent={scanProgress.total > 0 ? Math.round((scanProgress.processed / scanProgress.total) * 100) : 100}
                 size="small"
-                format={(percent) => {
-                  const phaseText = scanProgress.total > 0 ? `[${scanProgress.processed}/${scanProgress.total}]` : '';
+                status={scanProgress.total === 0 && scanProgress.processed === 0 ? 'normal' : 'active'}
+                format={() => {
+                  if (scanProgress.total === 0) {
+                    return '扫描完成';
+                  }
+                  const phaseText = `[${scanProgress.processed}/${scanProgress.total}]`;
                   const countText = scanProgress.new > 0 ? `(新：${scanProgress.new})` : '';
                   return `${phaseText} ${countText}`.trim();
                 }}

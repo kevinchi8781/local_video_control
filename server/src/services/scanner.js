@@ -138,7 +138,7 @@ let scanState = {
   updated: 0,
   skipped: 0,
   generatingThumbnails: false,
-  currentPhase: 'scanning' // 'scanning' | 'generating' | 'complete'
+  currentPhase: 'idle' // 'idle' | 'scanning' | 'generating' | 'cleaning' | 'complete'
 };
 
 // 获取扫描状态
@@ -308,12 +308,14 @@ async function executeScan() {
     console.log(`【阶段 3/3】发现 ${newVideosToProcess.length} 个新视频，开始生成缩略图...`);
     scanState.currentPhase = 'generating';
     scanState.generatingThumbnails = true;
-    scanState.processed = 0;
-    scanState.total = newVideosToProcess.length;
+    // 不要重置 processed 和 total，保持累计进度
+    // scanState.processed = 0;
+    // scanState.total = newVideosToProcess.length;
 
     for (let i = 0; i < newVideosToProcess.length; i++) {
       const { videoPath, fileInfo, fileStats, modifiedAt } = newVideosToProcess[i];
       scanState.processed = i + 1;
+      scanState.total = newVideosToProcess.length;
       scanState.currentFile = `正在生成缩略图：${path.basename(videoPath)}`;
 
       try {
@@ -345,6 +347,8 @@ async function executeScan() {
   scanState.isScanning = false;
   scanState.generatingThumbnails = false;
   scanState.currentPhase = 'complete';
+  // 保持 final stats 供前端最后一次轮询显示
+  // 不重置 processed 和 total，让前端看到最终统计
 
   const result = {
     scanned: stats.scanned,
