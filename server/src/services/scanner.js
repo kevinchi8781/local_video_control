@@ -32,7 +32,7 @@ function isVideoFile(filename) {
 function getVideoDuration(filePath, ffmpegPath) {
   try {
     // ffprobe 通常和 ffmpeg 在同一目录
-    const ffprobePath = ffmpegPath.replace('ffmpeg.exe', 'ffprobe.exe').replace('ffmpeg', 'ffprobe');
+    const ffprobePath = ffmpegPath.replace(/ffmpeg(?:\.exe)?$/i, 'ffprobe.exe');
     const cmd = `"${ffprobePath}" -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`;
     const output = execSync(cmd, { encoding: 'utf-8', timeout: 10000 });
     const duration = parseFloat(output.trim());
@@ -47,11 +47,11 @@ function getVideoDuration(filePath, ffmpegPath) {
 
 // 生成缩略图和时长（一次性获取，避免两次 ffmpeg 调用）
 async function generateThumbnailAndDuration(filePath, ffmpegPath) {
-  try {
-    // 先获取视频时长
-    const duration = getVideoDuration(filePath, ffmpegPath);
-    if (!duration) return { duration: null, thumbnail: null };
+  // 先获取视频时长
+  const duration = getVideoDuration(filePath, ffmpegPath);
+  if (!duration) return { duration: null, thumbnail: null };
 
+  try {
     // 计算截取位置：20% 处，最少 5 秒，最多 60 秒
     const seekTime = Math.min(60, Math.max(5, duration * 0.2));
     const timestamp = seekTime.toFixed(2); // 直接用秒数，不需要时分秒格式
@@ -74,7 +74,8 @@ async function generateThumbnailAndDuration(filePath, ffmpegPath) {
   } catch (error) {
     console.error(`生成缩略图失败 ${filePath}:`, error.message);
   }
-  return { duration: null, thumbnail: null };
+  // 即使缩略图生成失败，duration 已经获取到了，仍然返回
+  return { duration, thumbnail: null };
 }
 
 // 格式化文件大小
