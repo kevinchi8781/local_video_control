@@ -19,8 +19,8 @@ router.get('/', async (req, res) => {
       search,
       durationMin,
       durationMax,
-      sortBy = 'filename',
-      sortOrder = 'asc'
+      sortBy = 'modified',
+      sortOrder = 'desc'
     } = req.query;
 
     const db = await getDatabase();
@@ -57,7 +57,8 @@ router.get('/', async (req, res) => {
     // 排序
     const orderColumn = sortBy === 'duration' ? 'duration_seconds' :
                         sortBy === 'size' ? 'file_size' :
-                        sortBy === 'created' ? 'created_at' : 'filename';
+                        sortBy === 'created' ? 'created_at' :
+                        sortBy === 'modified' ? 'modified_at' : 'filename';
     const order = sortOrder === 'desc' ? 'DESC' : 'ASC';
 
     // 查询总数

@@ -21,8 +21,8 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState('filename');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useState('modified');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const queryClient = useQueryClient();
 
   // 监听全局刷新事件
@@ -114,6 +114,7 @@ export default function HomePage() {
                 onChange={(value) => setSortBy(value)}
                 style={{ width: 120 }}
                 options={[
+                  { label: '修改时间', value: 'modified' },
                   { label: '文件名', value: 'filename' },
                   { label: '时长', value: 'duration' },
                   { label: '大小', value: 'size' },
